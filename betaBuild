@@ -1,0 +1,68 @@
+import requests
+from bs4 import BeautifulSoup
+
+
+def get_cuisine_links():
+    # Request the AllRecipes cuisine page
+    response = requests.get('https://www.allrecipes.com/cuisine-a-z-6740455')
+    soup = BeautifulSoup(response.content, 'html.parser')
+
+    # Find all cuisine links
+    cuisine_links = []
+    cuisine_links = soup.find_all('a', class_='mntl-link-list__link')
+
+    # Extract and return the href attribute of each link
+    return [link['href'] for link in cuisine_links]
+    get_recipes_from_cuisine(cuisine_url)
+
+
+def get_recipes_from_cuisine(cuisine_url):
+    recipes = []
+
+    # Request each cuisine page
+    cuisine_response = requests.get(cuisine_url)
+    cuisine_soup = BeautifulSoup(cuisine_response.content, 'html.parser')
+
+
+    # Find recipe links on the cuisine page
+    recipe_links = cuisine_soup.find_all('a', class_='comp mntl-card-list-items mntl-document-card mntl-card card--image-top card card--no-image')
+
+
+    for recipe_link in recipe_links:
+        recipe_url = recipe_link['href']
+        recipe_response = requests.get(recipe_url)
+        recipe_soup = BeautifulSoup(recipe_response.content, 'html.parser')
+
+        # Extract recipe details
+        title_element = recipe_soup.find('h1', class_='article-heading type--lion').get_text()
+        print(title_element)
+        ingredients_element = recipe_soup.find_all('span', class_='ingredients-item-name')
+        cooking_time_element = recipe_soup.find('div', class_='two-subcol-content-wrapper')
+
+        if title_element and ingredients_element and cooking_time_element:
+            title = title_element.text.strip()
+            ingredients = [ingredient.text.strip() for ingredient in ingredients_element]
+            cooking_time = cooking_time_element.text.strip()
+            recipes.append((title, ingredients, cooking_time))
+
+    return recipes
+
+
+def scrape_recipe():
+    cuisine_urls = get_cuisine_links()
+    all_recipes = []
+
+    for cuisine_url in cuisine_urls:
+        cuisine_recipes = get_recipes_from_cuisine(cuisine_url)
+        all_recipes.extend(cuisine_recipes)
+
+    return all_recipes
+
+
+# Call the function and print the results
+recipes = scrape_recipe()
+for recipe in recipes:
+    print(recipe)
+
+get_cuisine_links()
+scrape_recipe()
