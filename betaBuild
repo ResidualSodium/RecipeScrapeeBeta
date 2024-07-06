@@ -1,68 +1,200 @@
-import requests
+import os
+from selenium import webdriver
+import re
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.common.exceptions import TimeoutException, StaleElementReferenceException
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.common.action_chains import ActionChains
+from selenium.common.exceptions import ElementClickInterceptedException
+import time
+import sys
 from bs4 import BeautifulSoup
+import pandas as pd
+
+############~~~~~~~ Global variables for pathing ~~~~~~~############
+user = os.getlogin()
+
+############~~~~~~~ Lists && random settings needed ~~~~~~~############
+
+possible_profile_names = ["default", "Default"]
+possible_directories = ["C:\\", "D:\\", "E:\\", "F:\\"]
+
+standard_time = 0.2
+alternate_time = 0.5
+nonStandard_time = 1.5
 
 
-def get_cuisine_links():
-    # Request the AllRecipes cuisine page
-    response = requests.get('https://www.allrecipes.com/cuisine-a-z-6740455')
-    soup = BeautifulSoup(response.content, 'html.parser')
+############~~~~~~~ Find Google Chrome.EXE~~~~~~~############
 
-    # Find all cuisine links
-    cuisine_links = []
-    cuisine_links = soup.find_all('a', class_='mntl-link-list__link')
+def find_chrome_directory(starting_directories=possible_directories):
+    # Define the name of the Chrome executable
+    chrome_executable = "chrome.exe"  # Adjust for macOS and Linux if needed
 
-    # Extract and return the href attribute of each link
-    return [link['href'] for link in cuisine_links]
-    get_recipes_from_cuisine(cuisine_url)
+    # Recursively search for Chrome in all directories
+    for starting_directory in starting_directories:
+        for foldername, subfolders, filenames in os.walk(starting_directory):
+            if chrome_executable in filenames:
+                # Chrome executable found, return its directory
+                chrome_directory = os.path.join(foldername, chrome_executable)
+                return chrome_directory
 
-
-def get_recipes_from_cuisine(cuisine_url):
-    recipes = []
-
-    # Request each cuisine page
-    cuisine_response = requests.get(cuisine_url)
-    cuisine_soup = BeautifulSoup(cuisine_response.content, 'html.parser')
+    print("Google Chrome not found.")
+    return None
 
 
-    # Find recipe links on the cuisine page
-    recipe_links = cuisine_soup.find_all('a', class_='comp mntl-card-list-items mntl-document-card mntl-card card--image-top card card--no-image')
+chrome_directory = find_chrome_directory()
+if chrome_directory:
+    print(f"The current directory of Google Chrome is: {chrome_directory}")
 
 
-    for recipe_link in recipe_links:
-        recipe_url = recipe_link['href']
-        recipe_response = requests.get(recipe_url)
-        recipe_soup = BeautifulSoup(recipe_response.content, 'html.parser')
-
-        # Extract recipe details
-        title_element = recipe_soup.find('h1', class_='article-heading type--lion').get_text()
-        print(title_element)
-        ingredients_element = recipe_soup.find_all('span', class_='ingredients-item-name')
-        cooking_time_element = recipe_soup.find('div', class_='two-subcol-content-wrapper')
-
-        if title_element and ingredients_element and cooking_time_element:
-            title = title_element.text.strip()
-            ingredients = [ingredient.text.strip() for ingredient in ingredients_element]
-            cooking_time = cooking_time_element.text.strip()
-            recipes.append((title, ingredients, cooking_time))
-
-    return recipes
+############~~~~~~~ Find Google Chrome Profile Path ~~~~~~~############
+def find_chrome_profile_dir(starting_directory="C:\\Users\\{user}\\AppData\\Local\\Google\\Chrome"):
+    chrome_profile = "User Data"
+    # Substitute the {user} variable with the actual username
+    starting_directory = starting_directory.format(user=os.getlogin())
+    # Search for Chrome profile in all directories
+    for folder_name, sub_folders, fil_enames in os.walk(starting_directory):
+        if chrome_profile in sub_folders:
+            # If Chrome profile found, return its directory
+            global chrome_profile_directory
+            chrome_profile_directory = os.path.join(folder_name, chrome_profile)
+            print("this is the directory: " + str(chrome_profile_directory))
+            return chrome_profile_directory
+    print("Google Chrome profile not found.")
+    return None
 
 
-def scrape_recipe():
-    cuisine_urls = get_cuisine_links()
-    all_recipes = []
+############~~~~~~~ Find Google Chrome Profile ~~~~~~~############
+def find_chrome_profile():
+    global directory_locations
+    directory_locations = []
+    for i in possible_profile_names:
+        for folder_name, sub_folders, file_names in os.walk(chrome_profile_directory):
+            if i in sub_folders:
+                global profile_name
+                profile_name = i
+                print(f"Profile found: {i}")
+                directory_locations.append(os.path.join(folder_name, i))
+                pass
+    print(*directory_locations, sep='\n')
 
-    for cuisine_url in cuisine_urls:
-        cuisine_recipes = get_recipes_from_cuisine(cuisine_url)
-        all_recipes.extend(cuisine_recipes)
 
-    return all_recipes
+############~~~~~~~ Run the pre-configs ~~~~~~~############
+
+find_chrome_profile_dir()
+find_chrome_directory()
+find_chrome_profile()
+
+############~~~~~~~ Modify pathing for insertion later ~~~~~~~############
+
+modified_chrome_profile_directory = re.sub(r'\\', r'\\\\', chrome_profile_directory)
+modified_chrome_directory = re.sub(r'\\', r'\\\\', str(chrome_directory))
+print(modified_chrome_profile_directory)
+print(modified_chrome_directory)
+
+############~~~~~~~ Start Selenium Options ~~~~~~~############
+
+chrome_options = webdriver.ChromeOptions()
+chrome_options.add_argument(
+    'user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36')
+chrome_options.add_argument('--disable-blink-features=AutomationControlled')
+chrome_options.add_argument('--disable-extensions')
+chrome_options.add_argument('--disable-infobars')
+chrome_options.add_argument('--disable-gpu')
+chrome_options.add_argument('--disable-dev-shm-usage')
+chrome_options.add_argument("--flag-switches-begin")
+chrome_options.add_argument("--flag-switches-end")
+chrome_options.add_argument("--origin-trial-disabled-features=WebGPU")
+chrome_options.add_experimental_option("useAutomationExtension", False)
+chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
+chrome_options.add_experimental_option("excludeSwitches", ["test-type"])
+chrome_options.add_argument('--no-sandbox')
+chrome_options.binary_location = str(modified_chrome_directory)
+userdatadir = str(modified_chrome_profile_directory)
+userdatadir.format(user=os.getlogin())
+profile_directory = str(profile_name)
+chrome_options.add_argument(f"--user-data-dir={userdatadir}")
+chrome_options.add_argument(f'--profile-directory={profile_directory}')
+# chrome_options.add_argument('--incognito')
+driver = webdriver.Chrome(options=chrome_options)
+driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
 
 
-# Call the function and print the results
-recipes = scrape_recipe()
-for recipe in recipes:
-    print(recipe)
+############~~~~~~~ Get Foodnetwork Recipes ~~~~~~~############
+def get_list_of_recipe_links():
 
-get_cuisine_links()
-scrape_recipe()
+    list_of_alf_rec_links = []
+    a_to_z_elements = []
+    driver.get('https://www.foodnetwork.com/recipes/recipes-a-z/123')
+    elements = driver.find_elements(By.CSS_SELECTOR, 'a.o-IndexPagination__a-Button')
+
+    for i in elements:
+        href = i.get_attribute('href')
+        list_of_alf_rec_links.append(href)
+    get_recipes(list_of_alf_rec_links)
+
+
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+import time
+
+
+# Assuming driver is initialized somewhere before calling get_recipes
+# Example:
+# driver = webdriver.Chrome()
+
+def get_recipes(list_of_alf_rec_links):
+    all_recipe_names = []
+    all_recipe_links = []
+
+    for link in list_of_alf_rec_links:
+        driver.get(link)
+        time.sleep(2)  # Adjust delay if needed
+
+        try:
+            link_and_recipe = driver.find_elements(By.CLASS_NAME, 'm-PromoList__a-ListItem')  # Corrected class name
+
+            for item in link_and_recipe:
+                try:
+                    a_tag = item.find_element(By.TAG_NAME, 'a')
+                    recipe_name = a_tag.text
+                    recipe_link = a_tag.get_attribute('href')
+                    if recipe_name and recipe_link:
+                        all_recipe_names.append(recipe_name)
+                        all_recipe_links.append(recipe_link)
+                except Exception as e:
+                    print(f"Error extracting data: {e}")
+
+        except Exception as e:
+            print(f"Error finding elements: {e}")
+
+
+
+
+def create_recipe_dict(all_recipe_names, all_recipe_links):
+    recipe_dict = {}
+
+    for i in range(len(all_recipe_names)):
+        recipe_name = all_recipe_names[i]
+        recipe_link = all_recipe_links[i]
+        recipe_dict[recipe_name] = recipe_link
+
+    print(recipe_dict)
+    return recipe_dict
+    export_to_excel(recipe_dict)
+
+
+def export_to_excel(recipe_dict, file_name):
+    current_path = os.getcwd()  # Get current working directory
+    file_path = os.path.join(current_path, file_name)  # Construct full file path
+
+    df = pd.DataFrame(list(recipe_dict.items()), columns=['Recipe Name', 'Links'])
+    df.to_excel(file_path, index=False)
+    print(f"Data successfully exported to {file_path}")
+
+#recipe_and_ingredients(all_recipe_links):
+    #
+
+get_list_of_recipe_links()
