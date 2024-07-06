@@ -8,6 +8,7 @@ from selenium.common.exceptions import TimeoutException, StaleElementReferenceEx
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.common.exceptions import ElementClickInterceptedException
+from selenium.common.exceptions import NoSuchElementException
 import time
 import sys
 from bs4 import BeautifulSoup
@@ -136,10 +137,6 @@ def get_list_of_recipe_links():
     get_recipes(list_of_alf_rec_links)
 
 
-from selenium import webdriver
-from selenium.webdriver.common.by import By
-import time
-
 
 # Assuming driver is initialized somewhere before calling get_recipes
 # Example:
@@ -169,21 +166,54 @@ def get_recipes(list_of_alf_rec_links):
 
         except Exception as e:
             print(f"Error finding elements: {e}")
+    get_cook_details(all_recipe_links, all_recipe_names)
 
+def get_cook_details(all_recipe_links, all_recipe_names):
+    all_recipe_links = all_recipe_links
+    all_recipe_names = all_recipe_names
 
+    cook_time = []
+    ingredients_dict = {}
+    recipe_id = 1  # Start from 1
 
+    # Open each link and get details
+    for link in all_recipe_links:
+        driver.get(link)
+        time.sleep(2)  # Wait for the page to load
 
-def create_recipe_dict(all_recipe_names, all_recipe_links):
-    recipe_dict = {}
+        # Scrape cook time with error handling
+        try:
+            total_time = driver.find_element(By.CLASS_NAME,
+                                             'o-RecipeInfo__a-Description.m-RecipeInfo__a-Description--Total').text
+        except NoSuchElementException:
+            total_time = "No cook time found"
+        cook_time.append(total_time)
 
-    for i in range(len(all_recipe_names)):
-        recipe_name = all_recipe_names[i]
-        recipe_link = all_recipe_links[i]
-        recipe_dict[recipe_name] = recipe_link
+        # Scrape ingredients
+        ingredient_elements = driver.find_elements(By.CLASS_NAME, 'o-Ingredients__a-Ingredient--CheckboxLabel')
+        ingredients_list = [element.text for element in ingredient_elements]
+        ingredients_string = ", ".join(ingredients_list)
 
+        # Scrape directions (assuming directions are present)
+        direction_elements = driver.find_elements(By.CLASS_NAME, 'o-Method__m-Body')
+        directions_list = [element.text for element in direction_elements]
+
+        # Add the ingredients and directions to the dictionary under the current recipe_id
+        ingredients_dict[recipe_id] = {
+            "ingredients": ingredients_string,
+            "directions": directions_list
+        }
+
+        # Increment the recipe_id for the next recipe
+        recipe_id += 1
+
+    create_recipe_dict(ingredients_dict, all_recipe_names, all_recipe_links)
+
+def create_recipe_dict(all_recipe_names, all_recipe_links, ingredients_dict):
+    recipe_dict = dict(zip(all_recipe_names, all_recipe_links, ingredients_dict))
     print(recipe_dict)
-    return recipe_dict
-    export_to_excel(recipe_dict)
+    file_name = "recipes.xlsx"
+    export_to_excel(recipe_dict, file_name)
 
 
 def export_to_excel(recipe_dict, file_name):
@@ -194,7 +224,5 @@ def export_to_excel(recipe_dict, file_name):
     df.to_excel(file_path, index=False)
     print(f"Data successfully exported to {file_path}")
 
-#recipe_and_ingredients(all_recipe_links):
-    #
 
 get_list_of_recipe_links()
